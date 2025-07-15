@@ -112,99 +112,56 @@ Sub SetPageAndBodyFormat()
 End Sub
 
 ' 摘要格式化宏
-Sub FormatAbstractTitle()
-    Dim para As Paragraph
-    Dim txt As String
-    For Each para In ActiveDocument.Paragraphs
-        txt = Trim(para.Range.Text)
-        ' 只处理以“摘要”开头的段落
-        If Left(txt, 2) = "摘要" Then
-            ' 检查第三个字符是否为冒号（全角或半角）
-            Dim thirdChar As String
-            If para.Range.Characters.Count >= 3 Then
-                thirdChar = para.Range.Characters(3)
-            Else
-                thirdChar = ""
-            End If
-            If thirdChar <> "：" And thirdChar <> ":" Then
-                para.Range.Characters(2).InsertAfter "："
-            End If
-            ' 格式化“摘要”二字
-            With para.Range.Characters(1).Font
-                .NameFarEast = "宋体"
-                .Name = "宋体"
-                .Size = 12
-                .Bold = True
-                .Color = wdColorBlack
-            End With
-            With para.Range.Characters(2).Font
-                .NameFarEast = "宋体"
-                .Name = "宋体"
-                .Size = 12
-                .Bold = True
-                .Color = wdColorBlack
-            End With
-            ' 格式化冒号
-            If para.Range.Characters.Count >= 3 Then
-                With para.Range.Characters(3).Font
-                    .NameFarEast = "宋体"
-                    .Name = "宋体"
-                    .Size = 12
-                    .Bold = True
-                    .Color = wdColorBlack
-                End With
-            End If
-            ' 段落格式
-            para.Range.ParagraphFormat.Alignment = wdAlignParagraphLeft
-            para.Range.ParagraphFormat.FirstLineIndent = 24
-        End If
-    Next para
-    MsgBox "摘要标题格式化完成！"
-End Sub
-
-Sub FormatAbstractInlineAndMerge()
+Sub MergeAndFormatAbstract()
+    Dim i As Integer
     Dim para As Paragraph
     Dim nextPara As Paragraph
     Dim txt As String
-    Dim absLen As Integer
-    Dim rngContent As Range
-    For Each para In ActiveDocument.Paragraphs
-        txt = Trim(para.Range.Text)
-        ' 只处理以“摘要”开头的段落
-        If Left(txt, 2) = "摘要" Then
-            absLen = 2
-            ' 检查第三个字符是否为冒号（全角或半角）
-            Dim thirdChar As String
-            If para.Range.Characters.Count >= 3 Then
-                thirdChar = para.Range.Characters(3)
-            Else
-                thirdChar = ""
-            End If
-            If thirdChar <> "：" And thirdChar <> ":" Then
-                ' 在“摘要”后插入全角冒号
-                para.Range.Characters(2).InsertAfter "："
-            End If
-            ' 合并下一段到本段冒号后
+    Dim contentTxt As String
+    Dim rngEnd As Range
+    Dim rng As Range
+    
+    For i = ActiveDocument.Paragraphs.Count To 1 Step -1
+        Set para = ActiveDocument.Paragraphs(i)
+        txt = Trim(Replace(para.Range.Text, vbCr, ""))
+        If txt = "摘要"  Then
+            ' 只处理这类段落
+            MsgBox "找到摘要段内容: [" & para.Range.Text & "]"
             Set nextPara = para.Next
             If Not nextPara Is Nothing Then
-                Dim nextTxt As String
-                nextTxt = Trim(nextPara.Range.Text)
-                If nextTxt <> "" Then
-                    ' 在当前段落末尾插入下一个段落内容
-                    para.Range.Characters(para.Range.Characters.Count).InsertAfter nextTxt
-                    ' 删除下一段
-                    nextPara.Range.Delete
+                MsgBox "找到内容段: [" & nextPara.Range.Text & "]"
+                contentTxt = nextPara.Range.Text
+                contentTxt = Replace(contentTxt, vbCr, "")
+                contentTxt = Replace(contentTxt, vbLf, "")
+                contentTxt = Trim(contentTxt)
+                ' 如果有“关键词”，只取前面部分
+                Dim kwPos As Integer
+                kwPos = InStr(contentTxt, "关键词")
+                If kwPos > 0 Then
+                    contentTxt = Left(contentTxt, kwPos - 1)
                 End If
+                ' 获取 para 段落的最后一个字符（段落符号）前的位置
+                Dim rngInsert As Range
+                Set rngInsert = para.Range.Duplicate
+                rngInsert.End = rngInsert.End - 1  ' 不包括段落符号
+                rngInsert.Collapse wdCollapseEnd
+                rngInsert.InsertAfter contentTxt
+                MsgBox "合并后摘要段内容: [" & para.Range.Text & "]"
+                nextPara.Range.Delete
+            Else
+                MsgBox "未找到内容段"
             End If
             ' 格式化“摘要”二字
-            With para.Range.Characters(1).Font
+            Set rng = para.Range.Characters(1)
+            With rng.Font
                 .NameFarEast = "宋体"
                 .Name = "宋体"
-                .Size = 12
+                .Size = 12 ' 小四
                 .Bold = True
                 .Color = wdColorBlack
             End With
-            With para.Range.Characters(2).Font
+            Set rng = para.Range.Characters(2)
+            With rng.Font
                 .NameFarEast = "宋体"
                 .Name = "宋体"
                 .Size = 12
@@ -213,7 +170,8 @@ Sub FormatAbstractInlineAndMerge()
             End With
             ' 格式化冒号
             If para.Range.Characters.Count >= 3 Then
-                With para.Range.Characters(3).Font
+                Set rng = para.Range.Characters(3)
+                With rng.Font
                     .NameFarEast = "宋体"
                     .Name = "宋体"
                     .Size = 12
@@ -222,151 +180,67 @@ Sub FormatAbstractInlineAndMerge()
                 End With
             End If
             ' 格式化内容部分
+            Dim rngContent As Range
             If para.Range.Characters.Count > 3 Then
                 Set rngContent = para.Range.Duplicate
-                rngContent.Start = rngContent.Start + 3 * 2 ' 3个中文字符
+                rngContent.Start = rngContent.Start + 3 * 2 ' 跳过3个中文字符
                 With rngContent.Font
                     .NameFarEast = "宋体"
-                    .Name = "Times New Roman"
+                    .Name = "宋体"
                     .Size = 12
                     .Bold = False
                     .Color = wdColorBlack
                 End With
             End If
-            para.Range.ParagraphFormat.Alignment = wdAlignParagraphLeft
-            para.Range.ParagraphFormat.FirstLineIndent = 24
-        End If
-    Next para
-    MsgBox "摘要合并与格式化完成！"
-End Sub
-
-Sub FormatAbstractTitleAndMerge()
-    Dim para As Paragraph
-    Dim nextPara As Paragraph
-    Dim txt As String
-    For Each para In ActiveDocument.Paragraphs
-        txt = Trim(para.Range.Text)
-        ' 只处理以“摘要”开头的段落
-        If Left(txt, 2) = "摘要" Then
-            ' 检查第三个字符是否为冒号（全角或半角）
-            Dim thirdChar As String
-            If para.Range.Characters.Count >= 3 Then
-                thirdChar = para.Range.Characters(3)
-            Else
-                thirdChar = ""
-            End If
-            If thirdChar <> "：" And thirdChar <> ":" Then
+            ' 判断“摘要”后是否有冒号，没有则补全角冒号
+            Dim paraText As String
+            paraText = para.Range.Text
+            If Len(paraText) < 3 Or (Mid(paraText, 3, 1) <> "：" And Mid(paraText, 3, 1) <> ":") Then
                 para.Range.Characters(2).InsertAfter "："
             End If
-            ' 合并下一段到本段冒号后
-            Set nextPara = para.Next
-            If Not nextPara Is Nothing Then
-                Dim nextTxt As String
-                nextTxt = Replace(Replace(nextPara.Range.Text, vbCr, ""), vbLf, "") ' 去掉换行
-                nextTxt = Trim(nextTxt)
-                If nextTxt <> "" Then
-                    ' 在当前段落末尾插入下一个段落内容
-                    Dim rngEnd As Range
-                    Set rngEnd = para.Range.Duplicate
-                    rngEnd.Collapse wdCollapseEnd
-                    rngEnd.InsertAfter nextTxt
-                    ' 删除下一段
-                    nextPara.Range.Delete
-                End If
-            End If
-            ' 格式化“摘要”二字
-            With para.Range.Characters(1).Font
+            ' 合并后，先将段落样式改为正文文本
+            para.Style = ActiveDocument.Styles("正文文本")
+
+            ' 整段统一设置为宋体、小四、黑色、非加粗
+            With para.Range.Font
                 .NameFarEast = "宋体"
                 .Name = "宋体"
                 .Size = 12
-                .Bold = True
+                .Bold = False
                 .Color = wdColorBlack
             End With
-            With para.Range.Characters(2).Font
-                .NameFarEast = "宋体"
-                .Name = "宋体"
-                .Size = 12
-                .Bold = True
-                .Color = wdColorBlack
-            End With
-            ' 格式化冒号
+
+            ' 只对“摘要”二字和冒号加粗
+            para.Range.Characters(1).Font.Bold = True
+            para.Range.Characters(2).Font.Bold = True
             If para.Range.Characters.Count >= 3 Then
-                With para.Range.Characters(3).Font
-                    .NameFarEast = "宋体"
-                    .Name = "宋体"
-                    .Size = 12
-                    .Bold = True
-                    .Color = wdColorBlack
-                End With
+                para.Range.Characters(3).Font.Bold = True
             End If
-            ' 段落格式
-            para.Range.ParagraphFormat.Alignment = wdAlignParagraphLeft
-            para.Range.ParagraphFormat.FirstLineIndent = 24
+
+            ' 最后设置段落缩进
+            With para.Range.ParagraphFormat
+                .Alignment = wdAlignParagraphLeft
+                .FirstLineIndent = 24 ' 首行缩进两字符
+            End With
+
         End If
-    Next para
-    MsgBox "摘要标题及内容合并完成！"
+    Next i
+    MsgBox "摘要格式化完成！"
+
+
 End Sub
 
-Sub MergeAbstractParagraph()
+Sub ShowFirstHeading1Trim()
     Dim para As Paragraph
-    Dim nextPara As Paragraph
     Dim txt As String
     For Each para In ActiveDocument.Paragraphs
-        txt = Trim(para.Range.Text)
-        If Left(txt, 2) = "摘要" Then
-            ' 检查第三个字符是否为冒号（全角或半角），没有则插入
-            Dim thirdChar As String
-            If para.Range.Characters.Count >= 3 Then
-                thirdChar = para.Range.Characters(3)
-            Else
-                thirdChar = ""
-            End If
-            If thirdChar <> "：" And thirdChar <> ":" Then
-                para.Range.Characters(2).InsertAfter "："
-            End If
-            ' 如果当前段落后还有内容段落，则合并
-            Set nextPara = para.Next
-            If Not nextPara Is Nothing Then
-                Dim nextTxt As String
-                nextTxt = Trim(nextPara.Range.Text)
-                If nextTxt <> "" Then
-                    ' 在当前段落末尾插入下一个段落内容
-                    para.Range.Collapse wdCollapseEnd
-                    para.Range.InsertAfter nextTxt
-                    ' 删除下一段
-                    nextPara.Range.Delete
-                End If
-            End If
-            ' 格式化“摘要”二字
-            With para.Range.Characters(1).Font
-                .NameFarEast = "宋体"
-                .Name = "宋体"
-                .Size = 12
-                .Bold = True
-                .Color = wdColorBlack
-            End With
-            With para.Range.Characters(2).Font
-                .NameFarEast = "宋体"
-                .Name = "宋体"
-                .Size = 12
-                .Bold = True
-                .Color = wdColorBlack
-            End With
-            ' 格式化冒号
-            If para.Range.Characters.Count >= 3 Then
-                With para.Range.Characters(3).Font
-                    .NameFarEast = "宋体"
-                    .Name = "宋体"
-                    .Size = 12
-                    .Bold = True
-                    .Color = wdColorBlack
-                End With
-            End If
-            ' 段落格式
-            para.Range.ParagraphFormat.Alignment = wdAlignParagraphLeft
-            para.Range.ParagraphFormat.FirstLineIndent = 24
+        If para.Style = "标题1" Or para.Style = "Heading 1" Or para.Style = "标题 1" Then
+            txt = para.Range.Text
+            MsgBox "原始内容: [" & txt & "]"
+            MsgBox "Trim后: [" & Trim(txt) & "]"
+            MsgBox "Replace+Trim后: [" & Trim(Replace(txt, vbCr, "")) & "]"
+            Exit Sub
         End If
     Next para
-    MsgBox "摘要标题及内容合并完成！"
+    MsgBox "文档中没有找到一级标题（标题1/Heading 1/标题 1）"
 End Sub
-
