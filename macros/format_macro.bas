@@ -294,35 +294,65 @@ Sub InsertTableOfContents()
     Dim para As Paragraph
     Dim tocRange As Range
     Dim found As Boolean
+    Dim tocTitlePara As Paragraph
+    Dim tocTitleRange As Range
+    Dim insertPosition As Long
     
     found = False
     For Each para In ActiveDocument.Paragraphs
         If Trim(Replace(para.Range.Text, vbCr, "")) = "目录" Then
+            ' 记录插入位置
+            insertPosition = para.Range.Start
+            
             ' 找到目录位置，删除"目录"文字
             para.Range.Delete
-            ' 在该位置插入分页符
-            Set tocRange = para.Range
-            tocRange.Collapse wdCollapseStart
+            
+            ' 在记录的位置插入分页符
+            Set tocRange = ActiveDocument.Range(insertPosition, insertPosition)
             tocRange.InsertBreak Type:=wdPageBreak
-            ' 插入目录标题
-            tocRange.InsertAfter "目录" & vbCr
+            
+            ' 在分页符后插入目录标题
             tocRange.Collapse wdCollapseEnd
-            ' 先设置目录标题为TOC 标题样式，再格式化
-            Dim tocTitlePara As Paragraph
-            Set tocTitlePara = tocRange.Paragraphs(1)
+            tocRange.InsertAfter "目录" & vbCr
+            
+            ' 获取刚插入的目录标题段落（通过位置精确定位）
+            Dim i As Integer
+            For i = 1 To ActiveDocument.Paragraphs.Count
+                Set para = ActiveDocument.Paragraphs(i)
+                If Trim(Replace(para.Range.Text, vbCr, "")) = "目录" Then
+                    Set tocTitlePara = para
+                    Set tocTitleRange = para.Range.Duplicate
+                    Exit For
+                End If
+            Next i
+            
+            ' 先设置TOC 标题样式，避免出现在目录中
+            On Error Resume Next
             tocTitlePara.Style = ActiveDocument.Styles("TOC 标题")
-            With tocTitlePara.Range.Font
+            If Err.Number <> 0 Then
+                ' 如果TOC 标题样式不存在，使用正文文本样式，避免出现在目录中
+                tocTitlePara.Style = ActiveDocument.Styles("正文文本")
+                If Err.Number <> 0 Then
+                    tocTitlePara.Style = ActiveDocument.Styles("Normal")
+                End If
+            End If
+            On Error GoTo 0
+            
+            ' 应用格式到目录标题
+            With tocTitleRange.Font
                 .NameFarEast = "宋体"
                 .Name = "Times New Roman"
                 .Size = 18 ' 小二
                 .Bold = True
                 .Color = wdColorBlack
             End With
-            With tocTitlePara.Range.ParagraphFormat
+            With tocTitleRange.ParagraphFormat
                 .Alignment = wdAlignParagraphCenter
                 .FirstLineIndent = 0
             End With
-            ' 插入目录域代码
+            
+            ' 在目录标题后插入目录域代码
+            tocRange.Collapse wdCollapseEnd
             tocRange.Fields.Add Range:=tocRange, Type:=wdFieldTOC, Text:="", PreserveFormatting:=True
             ' 更新目录
             tocRange.Fields.Update
@@ -357,33 +387,10 @@ Sub UpdateTableOfContents()
     End If
 End Sub
 
-' 设置目录格式
-Sub FormatTableOfContents()
-    Dim para As Paragraph
-    Dim tocTitle As String
-    
-    ' 查找目录标题段落
-    For Each para In ActiveDocument.Paragraphs
-        If Trim(Replace(para.Range.Text, vbCr, "")) = "目录" Then
-            ' 先设置目录标题为TOC 标题样式，再格式化
-            para.Style = ActiveDocument.Styles("TOC 标题")
-            With para.Range.Font
-                .NameFarEast = "宋体"
-                .Name = "宋体"
-                .Size = 18 ' 小二
-                .Bold = True
-                .Color = wdColorBlack
-            End With
-            With para.Range.ParagraphFormat
-                .Alignment = wdAlignParagraphCenter
-                .FirstLineIndent = 0
-                End With
-            MsgBox "目录标题格式设置完成！"
-            Exit Sub
-        End If
-    Next para
-    MsgBox "未找到目录标题"
-End Sub
+' 设置目录格式（已废弃，避免样式继承问题）
+' Sub FormatTableOfContents()
+'     ' 此函数已被移除，避免样式继承问题
+' End Sub
 
 ' 完整的目录处理（查找位置、插入目录、设置格式）
 Sub ProcessTableOfContents()
@@ -391,8 +398,6 @@ Sub ProcessTableOfContents()
     FindTableOfContentsPosition
     ' 插入目录
     InsertTableOfContents
-    ' 设置目录格式
-    FormatTableOfContents
     ' 更新目录
     UpdateTableOfContents
     MsgBox "目录处理完成！"
