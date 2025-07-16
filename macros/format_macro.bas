@@ -13,7 +13,7 @@ Sub FormatTitleByHeadingStyle()
             End With
         End If
     Next para
-    MsgBox "题目格式化完成！"
+    ' MsgBox "题目格式化完成！"
 End Sub
 
 ' 一级标题格式化宏
@@ -31,7 +31,7 @@ Sub FormatLevel1Heading()
             End With
         End If
     Next para
-    MsgBox "一级标题格式化完成！"
+    ' MsgBox "一级标题格式化完成！"
 End Sub
 
 ' 二级标题格式化宏
@@ -49,7 +49,7 @@ Sub FormatLevel2Heading()
             End With
         End If
     Next para
-    MsgBox "二级标题格式化完成！"
+    ' MsgBox "二级标题格式化完成！"
 End Sub
 
 ' 三级标题格式化宏
@@ -67,7 +67,7 @@ Sub FormatLevel3Heading()
             End With
         End If
     Next para
-    MsgBox "三级标题格式化完成！"
+    ' MsgBox "三级标题格式化完成！"
 End Sub
 
 ' 正文格式化宏
@@ -96,7 +96,7 @@ Sub FormatBodyText()
             End With
         End If
     Next para
-    MsgBox "正文格式化完成！"
+    ' MsgBox "正文格式化完成！"
 End Sub
 
 Sub SetPageAndBodyFormat()
@@ -117,7 +117,7 @@ Sub SetPageAndBodyFormat()
         End If
     Next para
 
-    MsgBox "页面和正文行距设置完成！"
+    ' MsgBox "页面和正文行距设置完成！"
 End Sub
 
 ' 摘要格式化宏
@@ -143,10 +143,10 @@ Sub MergeAndFormatAbstract()
             
             If needMerge Then
                 ' 需要合并的情况
-                MsgBox "找到段落内容: [" & para.Range.Text & "]"
+                ' MsgBox "找到段落内容: [" & para.Range.Text & "]"
                 Set nextPara = para.Next
                 If Not nextPara Is Nothing Then
-                    MsgBox "找到内容段: [" & nextPara.Range.Text & "]"
+                    ' MsgBox "找到内容段: [" & nextPara.Range.Text & "]"
                     contentTxt = nextPara.Range.Text
                     contentTxt = Replace(contentTxt, vbCr, "")
                     contentTxt = Replace(contentTxt, vbLf, "")
@@ -168,10 +168,10 @@ Sub MergeAndFormatAbstract()
                     rngInsert.End = rngInsert.End - 1  ' 不包括段落符号
                     rngInsert.Collapse wdCollapseEnd
                     rngInsert.InsertAfter contentTxt
-                    MsgBox "合并后段落内容: [" & para.Range.Text & "]"
+                    ' MsgBox "合并后段落内容: [" & para.Range.Text & "]"
                     nextPara.Range.Delete
                 Else
-                    MsgBox "未找到内容段"
+                    ' MsgBox "未找到内容段"
                 End If
             End If
             
@@ -270,7 +270,7 @@ Sub MergeAndFormatAbstract()
             End With
         End If
     Next i
-    MsgBox "摘要格式化完成！"
+    ' MsgBox "摘要格式化完成！"
 
 
 End Sub
@@ -282,11 +282,11 @@ Sub FindTableOfContentsPosition()
     Dim para As Paragraph
     For Each para In ActiveDocument.Paragraphs
         If Trim(Replace(para.Range.Text, vbCr, "")) = "目录" Then
-            MsgBox "找到目录位置：" & para.Range.Start
+            ' MsgBox "找到目录位置：" & para.Range.Start
             Exit Sub
         End If
     Next para
-    MsgBox "未找到目录标记"
+    ' MsgBox "未找到目录标记"
 End Sub
 
 ' 插入目录
@@ -353,9 +353,12 @@ Sub InsertTableOfContents()
             
             ' 在目录标题后插入目录域代码
             tocRange.Collapse wdCollapseEnd
-            tocRange.Fields.Add Range:=tocRange, Type:=wdFieldTOC, Text:="", PreserveFormatting:=True
+            tocRange.Fields.Add Range:=tocRange, Type:=wdFieldTOC, Text:="\o ""1-3"" \h \z \u", PreserveFormatting:=True
             ' 更新目录
             tocRange.Fields.Update
+            
+            ' 设置目录条目格式（不加粗）
+            FormatTableOfContentsEntries
             
             ' 在目录后面添加分页符（找到目录内容的最后）
             Dim tocFound As Boolean
@@ -396,13 +399,13 @@ Sub InsertTableOfContents()
                 finalPageBreakRange.InsertBreak Type:=wdPageBreak
             End If
             found = True
-            MsgBox "目录插入完成！"
+            ' MsgBox "目录插入完成！"
             Exit For
         End If
     Next para
     
     If Not found Then
-        MsgBox "未找到目录标记，请在文档中插入'目录'段落"
+        ' MsgBox "未找到目录标记，请在文档中插入'目录'段落"
     End If
 End Sub
 
@@ -420,10 +423,50 @@ Sub UpdateTableOfContents()
     Next fld
     
     If updated Then
-        MsgBox "目录更新完成！"
+        ' MsgBox "目录更新完成！"
     Else
-        MsgBox "未找到目录域，请先插入目录"
+        ' MsgBox "未找到目录域，请先插入目录"
     End If
+End Sub
+
+' 设置目录条目格式（不加粗）
+Sub FormatTableOfContentsEntries()
+    Dim para As Paragraph
+    Dim txt As String
+    Dim tocFound As Boolean
+    
+    tocFound = False
+    
+    For Each para In ActiveDocument.Paragraphs
+        txt = Trim(Replace(para.Range.Text, vbCr, ""))
+        
+        ' 检查是否到达目录部分
+        If txt = "目录" Then
+            tocFound = True
+            GoTo NextPara
+        End If
+        
+        ' 检查是否到达下一个标题（结束目录部分）
+        If tocFound And (para.Style = "标题 1" Or para.Style = "标题 2" Or para.Style = "标题 3" Or _
+           para.Style = "Heading 1" Or para.Style = "Heading 2" Or para.Style = "Heading 3") Then
+            tocFound = False
+            GoTo NextPara
+        End If
+        
+        ' 如果在目录部分，设置条目格式
+        If tocFound And Len(txt) > 0 And txt <> "目录" Then
+            ' 设置目录条目不加粗
+            With para.Range.Font
+                .Bold = False
+                .NameFarEast = "宋体"
+                .Name = "Times New Roman"
+                .Size = 12
+                .Color = wdColorBlack
+            End With
+        End If
+        
+NextPara:
+    Next para
 End Sub
 
 ' 设置目录格式（已废弃，避免样式继承问题）
@@ -439,7 +482,7 @@ Sub ProcessTableOfContents()
     InsertTableOfContents
     ' 更新目录
     UpdateTableOfContents
-    MsgBox "目录处理完成！"
+    ' MsgBox "目录处理完成！"
 End Sub
 
 
@@ -497,7 +540,7 @@ Sub FormatReferences()
         End If
     Next i
     
-    MsgBox "参考文献标题格式化完成！"
+    ' MsgBox "参考文献标题格式化完成！"
 End Sub
 
 ' 格式化参考文献条目
@@ -585,7 +628,7 @@ Sub FormatReferenceEntries()
 NextPara:
     Next i
     
-    MsgBox "参考文献条目格式化完成！共处理 " & referenceCount & " 个条目。"
+    ' MsgBox "参考文献条目格式化完成！共处理 " & referenceCount & " 个条目。"
 End Sub
 
 ' 自动编号参考文献
@@ -634,7 +677,7 @@ Sub AutoNumberReferences()
 NextPara2:
     Next i
     
-    MsgBox "参考文献自动编号完成！共编号 " & referenceCount & " 个条目。"
+    ' MsgBox "参考文献自动编号完成！共编号 " & referenceCount & " 个条目。"
 End Sub
 
 ' 完整的参考文献处理宏（APA格式）
@@ -644,7 +687,7 @@ Sub ProcessReferences()
     ' 2. 格式化参考文献条目
     FormatReferenceEntries
     
-    MsgBox "参考文献处理完成！"
+    ' MsgBox "参考文献处理完成！"
 End Sub
 
 ' 参考文献按字母排序宏
@@ -780,7 +823,7 @@ NextParaSort:
         End If
     End If
     
-    MsgBox "参考文献排序完成！共排序 " & referenceCount & " 个条目。"
+    ' MsgBox "参考文献排序完成！共排序 " & referenceCount & " 个条目。"
 End Sub
 
 ' 完整的参考文献处理宏（包含排序）
@@ -792,7 +835,7 @@ Sub ProcessReferencesWithSort()
     ' 3. 格式化参考文献条目
     FormatReferenceEntries
     
-    MsgBox "参考文献处理完成（包含排序）！"
+    ' MsgBox "参考文献处理完成（包含排序）！"
 End Sub
 
 ' 总的一键格式化宏 - 按顺序执行所有格式化步骤
@@ -829,18 +872,18 @@ Sub FormatAllDocument()
     End If
     
     ' 1. 页面设置和正文行距
-    MsgBox "正在设置页面和正文行距..."
+    ' MsgBox "正在设置页面和正文行距..."
     SetPageAndBodyFormat
     
     ' 2. 标题格式化
-    MsgBox "正在格式化标题..."
+    ' MsgBox "正在格式化标题..."
     FormatTitleByHeadingStyle
     FormatLevel1Heading
     FormatLevel2Heading
     FormatLevel3Heading
     
     ' 3. 正文格式化
-    MsgBox "正在格式化正文..."
+    ' MsgBox "正在格式化正文..."
     FormatBodyText
     
     ' 4. 正文中数字和英文字体格式化（已移除，由其他格式化覆盖）
@@ -848,33 +891,33 @@ Sub FormatAllDocument()
     ' FormatNumbersAndEnglishInBody
     
     ' 5. 摘要和关键词格式化
-    MsgBox "正在格式化摘要和关键词..."
+    ' MsgBox "正在格式化摘要和关键词..."
     MergeAndFormatAbstract
     
     ' 6. 目录处理
-    MsgBox "正在处理目录..."
+    ' MsgBox "正在处理目录..."
     ProcessTableOfContents
     
     ' 7. 参考文献格式化（包含排序）
-    MsgBox "正在格式化参考文献..."
+    ' MsgBox "正在格式化参考文献..."
     ProcessReferencesWithSort
     
     ' 8. 图片居中处理
-    MsgBox "正在处理图片..."
+    ' MsgBox "正在处理图片..."
     ProcessImages
     
     Application.ScreenUpdating = True ' 恢复屏幕更新
     
-    MsgBox "文档格式化完成！" & vbCrLf & vbCrLf & _
-           "所有格式化步骤已执行完毕，包括：" & vbCrLf & _
-           "✓ 页面设置和行距" & vbCrLf & _
-           "✓ 标题格式化" & vbCrLf & _
-           "✓ 正文格式化" & vbCrLf & _
-           "✓ 数字和英文字体（已移除）" & vbCrLf & _
-           "✓ 摘要和关键词" & vbCrLf & _
-           "✓ 目录处理" & vbCrLf & _
-           "✓ 参考文献格式化（含排序）" & vbCrLf & _
-           "✓ 图片居中处理", vbInformation, "格式化完成"
+    ' MsgBox "文档格式化完成！" & vbCrLf & vbCrLf & _
+    '        "所有格式化步骤已执行完毕，包括：" & vbCrLf & _
+    '        "✓ 页面设置和行距" & vbCrLf & _
+    '        "✓ 标题格式化" & vbCrLf & _
+    '        "✓ 正文格式化" & vbCrLf & _
+    '        "✓ 数字和英文字体（已移除）" & vbCrLf & _
+    '        "✓ 摘要和关键词" & vbCrLf & _
+    '        "✓ 目录处理" & vbCrLf & _
+    '        "✓ 参考文献格式化（含排序）" & vbCrLf & _
+    '        "✓ 图片居中处理", vbInformation, "格式化完成"
     
     Exit Sub
 
@@ -938,7 +981,7 @@ Sub FormatAllDocumentQuick()
     
     Application.ScreenUpdating = True
     
-    MsgBox "快速格式化完成！", vbInformation, "格式化完成"
+    ' MsgBox "快速格式化完成！", vbInformation, "格式化完成"
     
     Exit Sub
 
@@ -977,7 +1020,7 @@ Sub FormatImages()
         imageCount = imageCount + 1
     Next inlineShape
     
-    MsgBox "图片居中格式化完成！共处理 " & imageCount & " 个图片。"
+    ' MsgBox "图片居中格式化完成！共处理 " & imageCount & " 个图片。"
 End Sub
 
 ' 图片标题格式化宏
@@ -1011,7 +1054,7 @@ Sub FormatImageCaptions()
         End If
     Next para
     
-    MsgBox "图片标题格式化完成！共处理 " & captionCount & " 个标题。"
+    ' MsgBox "图片标题格式化完成！共处理 " & captionCount & " 个标题。"
 End Sub
 
 ' 完整的图片处理宏
@@ -1021,6 +1064,6 @@ Sub ProcessImages()
     ' 2. 图片标题格式化
     FormatImageCaptions
     
-    MsgBox "图片处理完成！"
+    ' MsgBox "图片处理完成！"
 End Sub
 
