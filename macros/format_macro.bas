@@ -182,13 +182,21 @@ Sub MergeAndFormatAbstract()
             If Len(paraText) < titleLen + 1 Or _
                (Mid(paraText, titleLen + 1, 1) <> "：" And Mid(paraText, titleLen + 1, 1) <> ":") Then
                 If txt = "摘要" Or Left(txt, 3) = "摘要：" Then
-                    para.Range.Characters(2).InsertAfter "："
+                    If Len(paraText) < 3 Or Mid(paraText, 3, 1) <> "：" Then
+                        para.Range.Characters(2).InsertAfter "："
+                    End If
                 ElseIf txt = "关键词" Or Left(txt, 4) = "关键词：" Then
-                    para.Range.Characters(3).InsertAfter "："
+                    If Len(paraText) < 4 Or Mid(paraText, 4, 1) <> "：" Then
+                        para.Range.Characters(3).InsertAfter "："
+                    End If
                 ElseIf txt = "Abstract" Or Left(txt, 9) = "Abstract:" Then
-                    para.Range.Characters(8).InsertAfter ":"
+                    If Len(paraText) < 9 Or Mid(paraText, 9, 1) <> ":" Then
+                        para.Range.Characters(8).InsertAfter ":"
+                    End If
                 ElseIf txt = "Keywords" Or Left(txt, 9) = "Keywords:" Then
-                    para.Range.Characters(8).InsertAfter ":"
+                    If Len(paraText) < 9 Or Mid(paraText, 9, 1) <> ":" Then
+                        para.Range.Characters(8).InsertAfter ":"
+                    End If
                 End If
             End If
             
@@ -256,5 +264,200 @@ Sub MergeAndFormatAbstract()
     MsgBox "摘要格式化完成！"
 
 
+End Sub
+
+' 目录处理相关宏
+
+' 查找目录位置
+Sub FindTableOfContentsPosition()
+    Dim para As Paragraph
+    For Each para In ActiveDocument.Paragraphs
+        If Trim(Replace(para.Range.Text, vbCr, "")) = "目录" Then
+            MsgBox "找到目录位置：" & para.Range.Start
+            Exit Sub
+        End If
+    Next para
+    MsgBox "未找到目录标记"
+End Sub
+
+' 插入目录
+Sub InsertTableOfContents()
+    Dim para As Paragraph
+    Dim tocRange As Range
+    Dim found As Boolean
+    
+    found = False
+    For Each para In ActiveDocument.Paragraphs
+        If Trim(Replace(para.Range.Text, vbCr, "")) = "目录" Then
+            ' 找到目录位置，删除"目录"文字
+            para.Range.Delete
+            ' 在该位置插入分页符
+            Set tocRange = para.Range
+            tocRange.Collapse wdCollapseStart
+            tocRange.InsertBreak Type:=wdPageBreak
+            ' 插入目录标题
+            tocRange.InsertAfter "目录" & vbCr
+            tocRange.Collapse wdCollapseEnd
+            ' 先设置目录标题为TOC 标题样式，再格式化
+            Dim tocTitlePara As Paragraph
+            Set tocTitlePara = tocRange.Paragraphs(1)
+            tocTitlePara.Style = ActiveDocument.Styles("TOC 标题")
+            With tocTitlePara.Range.Font
+                .NameFarEast = "宋体"
+                .Name = "Times New Roman"
+                .Size = 18 ' 小二
+                .Bold = True
+                .Color = wdColorBlack
+            End With
+            With tocTitlePara.Range.ParagraphFormat
+                .Alignment = wdAlignParagraphCenter
+                .FirstLineIndent = 0
+            End With
+            ' 插入目录域代码
+            tocRange.Fields.Add Range:=tocRange, Type:=wdFieldTOC, Text:="", PreserveFormatting:=True
+            ' 更新目录
+            tocRange.Fields.Update
+            found = True
+            MsgBox "目录插入完成！"
+            Exit For
+        End If
+    Next para
+    
+    If Not found Then
+        MsgBox "未找到目录标记，请在文档中插入'目录'段落"
+    End If
+End Sub
+
+' 更新目录
+Sub UpdateTableOfContents()
+    Dim fld As Field
+    Dim updated As Boolean
+    
+    updated = False
+    For Each fld In ActiveDocument.Fields
+        If fld.Type = wdFieldTOC Then
+            fld.Update
+            updated = True
+        End If
+    Next fld
+    
+    If updated Then
+        MsgBox "目录更新完成！"
+    Else
+        MsgBox "未找到目录域，请先插入目录"
+    End If
+End Sub
+
+' 设置目录格式
+Sub FormatTableOfContents()
+    Dim para As Paragraph
+    Dim tocTitle As String
+    
+    ' 查找目录标题段落
+    For Each para In ActiveDocument.Paragraphs
+        If Trim(Replace(para.Range.Text, vbCr, "")) = "目录" Then
+            ' 先设置目录标题为TOC 标题样式，再格式化
+            para.Style = ActiveDocument.Styles("TOC 标题")
+            With para.Range.Font
+                .NameFarEast = "宋体"
+                .Name = "宋体"
+                .Size = 18 ' 小二
+                .Bold = True
+                .Color = wdColorBlack
+            End With
+            With para.Range.ParagraphFormat
+                .Alignment = wdAlignParagraphCenter
+                .FirstLineIndent = 0
+            End With
+            MsgBox "目录标题格式设置完成！"
+            Exit Sub
+        End If
+    Next para
+    MsgBox "未找到目录标题"
+End Sub
+
+' 完整的目录处理（查找位置、插入目录、设置格式）
+Sub ProcessTableOfContents()
+    ' 先查找目录位置
+    FindTableOfContentsPosition
+    ' 插入目录
+    InsertTableOfContents
+    ' 设置目录格式
+    FormatTableOfContents
+    ' 更新目录
+    UpdateTableOfContents
+    MsgBox "目录处理完成！"
+End Sub
+
+' 正文中数字和英文字体格式化宏
+Sub FormatNumbersAndEnglishInBody()
+    Dim para As Paragraph
+    Dim char As Range
+    Dim charText As String
+    Dim i As Integer
+    
+    For Each para In ActiveDocument.Paragraphs
+        ' 只处理正文段落
+        If para.Style = "正文文本" Or para.Style = "Normal" Or para.Style = "First Paragraph" Or para.Style = "正文" Then
+            ' 遍历段落中的每个字符
+            For i = 1 To para.Range.Characters.Count
+                Set char = para.Range.Characters(i)
+                charText = char.Text
+                
+                ' 检查是否为数字或英文字符
+                If IsNumeric(charText) Or _
+                   (Asc(charText) >= 65 And Asc(charText) <= 90) Or _  ' A-Z
+                   (Asc(charText) >= 97 And Asc(charText) <= 122) Then ' a-z
+                    ' 设置为Times New Roman
+                    With char.Font
+                        .Name = "Times New Roman"
+                        .NameFarEast = "Times New Roman"
+                    End With
+                End If
+            Next i
+        End If
+    Next para
+    
+    MsgBox "正文中数字和英文字体格式化完成！"
+End Sub
+
+' 更高效的正文中数字和英文字体格式化宏（使用正则表达式）
+Sub FormatNumbersAndEnglishInBodyAdvanced()
+    Dim para As Paragraph
+    Dim paraText As String
+    Dim i As Integer
+    Dim j As Integer
+    Dim charCode As Integer
+    Dim isEnglishOrNumber As Boolean
+    
+    For Each para In ActiveDocument.Paragraphs
+        ' 只处理正文段落
+        If para.Style = "正文文本" Or para.Style = "Normal" Or para.Style = "First Paragraph" Or para.Style = "正文" Then
+            ' 遍历段落中的每个字符
+            For i = 1 To para.Range.Characters.Count
+                charCode = Asc(para.Range.Characters(i).Text)
+                
+                ' 检查是否为数字或英文字符
+                isEnglishOrNumber = False
+                If charCode >= 48 And charCode <= 57 Then  ' 0-9
+                    isEnglishOrNumber = True
+                ElseIf charCode >= 65 And charCode <= 90 Then  ' A-Z
+                    isEnglishOrNumber = True
+                ElseIf charCode >= 97 And charCode <= 122 Then ' a-z
+                    isEnglishOrNumber = True
+                End If
+                
+                If isEnglishOrNumber Then
+                    ' 设置为Times New Roman
+                    With para.Range.Characters(i).Font
+                        .Name = "Times New Roman"
+                        .NameFarEast = "Times New Roman"
+                    End With
+                End If
+            Next i
+        End If
+    Next para
+    
+    MsgBox "正文中数字和英文字体格式化完成！"
 End Sub
 
