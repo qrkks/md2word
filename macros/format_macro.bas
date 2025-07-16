@@ -356,6 +356,45 @@ Sub InsertTableOfContents()
             tocRange.Fields.Add Range:=tocRange, Type:=wdFieldTOC, Text:="", PreserveFormatting:=True
             ' 更新目录
             tocRange.Fields.Update
+            
+            ' 在目录后面添加分页符（找到目录内容的最后）
+            Dim tocFound As Boolean
+            Dim para2 As Paragraph
+            Dim lastTocPara As Paragraph
+            Dim pageBreakAdded As Boolean
+            tocFound = False
+            pageBreakAdded = False
+            
+            For Each para2 In ActiveDocument.Paragraphs
+                If Trim(Replace(para2.Range.Text, vbCr, "")) = "目录" Then
+                    tocFound = True
+                ElseIf tocFound Then
+                    ' 检查是否到达下一个标题（结束目录部分）
+                    If para2.Style = "标题 1" Or para2.Style = "标题 2" Or para2.Style = "标题 3" Or _
+                       para2.Style = "Heading 1" Or para2.Style = "Heading 2" Or para2.Style = "Heading 3" Then
+                        ' 找到目录结束位置，在最后一个目录条目后添加分页符
+                        If Not lastTocPara Is Nothing And Not pageBreakAdded Then
+                            Dim pageBreakRange As Range
+                            Set pageBreakRange = lastTocPara.Range.Duplicate
+                            pageBreakRange.Collapse wdCollapseEnd
+                            pageBreakRange.InsertBreak Type:=wdPageBreak
+                            pageBreakAdded = True
+                        End If
+                        Exit For
+                    ElseIf Len(Trim(para2.Range.Text)) > 0 Then
+                        ' 记录目录中的非空段落
+                        Set lastTocPara = para2
+                    End If
+                End If
+            Next para2
+            
+            ' 如果没有找到下一个标题且还没有添加分页符，在最后一个目录条目后添加分页符
+            If tocFound And Not lastTocPara Is Nothing And Not pageBreakAdded Then
+                Dim finalPageBreakRange As Range
+                Set finalPageBreakRange = lastTocPara.Range.Duplicate
+                finalPageBreakRange.Collapse wdCollapseEnd
+                finalPageBreakRange.InsertBreak Type:=wdPageBreak
+            End If
             found = True
             MsgBox "目录插入完成！"
             Exit For
