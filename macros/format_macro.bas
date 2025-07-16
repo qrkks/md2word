@@ -192,7 +192,7 @@ Sub MergeAndFormatAbstract()
                (Mid(paraText, titleLen + 1, 1) <> "：" And Mid(paraText, titleLen + 1, 1) <> ":") Then
                 If txt = "摘要" Or Left(txt, 3) = "摘要：" Then
                     If Len(paraText) < 3 Or Mid(paraText, 3, 1) <> "：" Then
-                        para.Range.Characters(2).InsertAfter "："
+                para.Range.Characters(2).InsertAfter "："
                     End If
                 ElseIf txt = "关键词" Or Left(txt, 4) = "关键词：" Then
                     If Len(paraText) < 4 Or Mid(paraText, 4, 1) <> "：" Then
@@ -377,7 +377,7 @@ Sub FormatTableOfContents()
             With para.Range.ParagraphFormat
                 .Alignment = wdAlignParagraphCenter
                 .FirstLineIndent = 0
-            End With
+                End With
             MsgBox "目录标题格式设置完成！"
             Exit Sub
         End If
@@ -763,7 +763,8 @@ Sub FormatAllDocument()
                      "4. 正文中数字和英文字体格式化（已移除）" & vbCrLf & _
                      "5. 摘要和关键词格式化" & vbCrLf & _
                      "6. 目录处理" & vbCrLf & _
-                     "7. 参考文献格式化（包含排序）" & vbCrLf & vbCrLf & _
+                     "7. 参考文献格式化（包含排序）" & vbCrLf & _
+                     "8. 图片居中处理" & vbCrLf & vbCrLf & _
                      "是否继续？", vbYesNo + vbQuestion, "文档格式化")
     
     If response = vbNo Then
@@ -814,6 +815,10 @@ Sub FormatAllDocument()
     MsgBox "正在格式化参考文献..."
     ProcessReferencesWithSort
     
+    ' 8. 图片居中处理
+    MsgBox "正在处理图片..."
+    ProcessImages
+    
     Application.ScreenUpdating = True ' 恢复屏幕更新
     
     MsgBox "文档格式化完成！" & vbCrLf & vbCrLf & _
@@ -824,7 +829,8 @@ Sub FormatAllDocument()
            "✓ 数字和英文字体（已移除）" & vbCrLf & _
            "✓ 摘要和关键词" & vbCrLf & _
            "✓ 目录处理" & vbCrLf & _
-           "✓ 参考文献格式化（含排序）", vbInformation, "格式化完成"
+           "✓ 参考文献格式化（含排序）" & vbCrLf & _
+           "✓ 图片居中处理", vbInformation, "格式化完成"
     
     Exit Sub
 
@@ -845,7 +851,8 @@ Sub FormatAllDocumentQuick()
                      "4. 数字和英文字体格式化（已移除）" & vbCrLf & _
                      "5. 摘要和关键词格式化" & vbCrLf & _
                      "6. 目录处理" & vbCrLf & _
-                     "7. 参考文献格式化（不排序）" & vbCrLf & vbCrLf & _
+                     "7. 参考文献格式化（不排序）" & vbCrLf & _
+                     "8. 图片居中处理" & vbCrLf & vbCrLf & _
                      "是否继续？", vbYesNo + vbQuestion, "快速格式化")
     
     If response = vbNo Then
@@ -882,6 +889,9 @@ Sub FormatAllDocumentQuick()
     ' 7. 参考文献格式化（不排序）
     ProcessReferences
     
+    ' 8. 图片居中处理
+    ProcessImages
+    
     Application.ScreenUpdating = True
     
     MsgBox "快速格式化完成！", vbInformation, "格式化完成"
@@ -891,5 +901,82 @@ Sub FormatAllDocumentQuick()
 ErrorHandlerQuick:
     Application.ScreenUpdating = True
     MsgBox "格式化过程中出现错误：" & vbCrLf & Err.Description, vbCritical, "错误"
+End Sub
+
+' 图片居中格式化宏
+Sub FormatImages()
+    Dim shp As Shape
+    Dim inlineShape As InlineShape
+    Dim imageCount As Integer
+    
+    imageCount = 0
+    
+    ' 处理浮动图片（Shape对象）
+    For Each shp In ActiveDocument.Shapes
+        If shp.Type = msoPicture Or shp.Type = msoLinkedPicture Then
+            ' 设置图片居中
+            With shp
+                .Left = (ActiveDocument.PageSetup.PageWidth - .Width) / 2
+                .WrapFormat.Type = wdWrapSquare
+                .WrapFormat.Side = wdWrapBoth
+            End With
+            imageCount = imageCount + 1
+        End If
+    Next shp
+    
+    ' 处理内嵌图片（InlineShape对象）
+    For Each inlineShape In ActiveDocument.InlineShapes
+        ' 设置内嵌图片居中
+        With inlineShape.Range.ParagraphFormat
+            .Alignment = wdAlignParagraphCenter
+        End With
+        imageCount = imageCount + 1
+    Next inlineShape
+    
+    MsgBox "图片居中格式化完成！共处理 " & imageCount & " 个图片。"
+End Sub
+
+' 图片标题格式化宏
+Sub FormatImageCaptions()
+    Dim para As Paragraph
+    Dim txt As String
+    Dim captionCount As Integer
+    
+    captionCount = 0
+    
+    For Each para In ActiveDocument.Paragraphs
+        txt = Trim(Replace(para.Range.Text, vbCr, ""))
+        
+        ' 查找图片标题（以"图"或"Figure"开头）
+        If Left(txt, 2) = "图 " Or Left(txt, 7) = "Figure " Or _
+           Left(txt, 3) = "图 " Or Left(txt, 8) = "Figure " Then
+            ' 格式化图片标题
+            With para.Range.Font
+                .NameFarEast = "宋体"
+                .Name = "宋体"
+                .Size = 12 ' 小四
+                .Bold = False
+                .Color = wdColorBlack
+            End With
+            With para.Range.ParagraphFormat
+                .Alignment = wdAlignParagraphCenter ' 居中
+                .FirstLineIndent = 0 ' 无缩进
+                .LineSpacingRule = wdLineSpace1pt5
+                End With
+            captionCount = captionCount + 1
+        End If
+    Next para
+    
+    MsgBox "图片标题格式化完成！共处理 " & captionCount & " 个标题。"
+End Sub
+
+' 完整的图片处理宏
+Sub ProcessImages()
+    ' 1. 图片居中
+    FormatImages
+    ' 2. 图片标题格式化
+    FormatImageCaptions
+    
+    MsgBox "图片处理完成！"
 End Sub
 
