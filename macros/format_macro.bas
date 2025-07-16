@@ -312,6 +312,10 @@ Sub InsertTableOfContents()
         MsgBox "未找到目录标记，请在文档中插入'目录'段落"
         Exit Sub
     End If
+    ' 新增：如果目录段落样式已经是TOC 标题，则直接跳过
+    If tocPara.Style = "TOC 标题" Then
+        Exit Sub
+    End If
 
     ' 获取tocPara的索引
     Dim idx As Integer
