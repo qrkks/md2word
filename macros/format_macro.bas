@@ -287,124 +287,133 @@ Sub FindTableOfContentsPosition()
     ' MsgBox "未找到目录标记"
 End Sub
 
-' 插入目录
+' 插入目录（幂等实现）
 Sub InsertTableOfContents()
     Dim para As Paragraph
+    Dim tocPara As Paragraph
     Dim tocRange As Range
     Dim found As Boolean
     Dim tocTitlePara As Paragraph
     Dim tocTitleRange As Range
-    Dim insertPosition As Long
-    
+    Dim i As Integer
+    Dim fld As Field
     found = False
-    For Each para In ActiveDocument.Paragraphs
+    Set tocPara = Nothing
+
+    ' 1. 找到第一个“目录”标题段落
+    For i = 1 To ActiveDocument.Paragraphs.Count
+        Set para = ActiveDocument.Paragraphs(i)
         If Trim(Replace(para.Range.Text, vbCr, "")) = "目录" Then
-            ' 记录插入位置
-            insertPosition = para.Range.Start
-            
-            ' 找到目录位置，删除"目录"文字
-            para.Range.Delete
-            
-            ' 在记录的位置插入分页符
-            Set tocRange = ActiveDocument.Range(insertPosition, insertPosition)
-            tocRange.InsertBreak Type:=wdPageBreak
-            
-            ' 在分页符后插入目录标题
-            tocRange.Collapse wdCollapseEnd
-            tocRange.InsertAfter "目录" & vbCr
-            
-            ' 获取刚插入的目录标题段落（通过位置精确定位）
-            Dim i As Integer
-            For i = 1 To ActiveDocument.Paragraphs.Count
-                Set para = ActiveDocument.Paragraphs(i)
-                If Trim(Replace(para.Range.Text, vbCr, "")) = "目录" Then
-                    Set tocTitlePara = para
-                    Set tocTitleRange = para.Range.Duplicate
-                    Exit For
-                End If
-            Next i
-            
-            ' 先设置TOC 标题样式，避免出现在目录中
-            On Error Resume Next
-            tocTitlePara.Style = ActiveDocument.Styles("TOC 标题")
-            If Err.Number <> 0 Then
-                ' 如果TOC 标题样式不存在，使用正文文本样式，避免出现在目录中
-                tocTitlePara.Style = ActiveDocument.Styles("正文文本")
-                If Err.Number <> 0 Then
-                    tocTitlePara.Style = ActiveDocument.Styles("Normal")
-                End If
-            End If
-            On Error GoTo 0
-            
-            ' 应用格式到目录标题
-            With tocTitleRange.Font
-                .NameFarEast = "宋体"
-                .Name = "Times New Roman"
-                .Size = 18 ' 小二
-                .Bold = True
-                .Color = wdColorBlack
-            End With
-            With tocTitleRange.ParagraphFormat
-                .Alignment = wdAlignParagraphCenter
-                .FirstLineIndent = 0
-            End With
-            
-            ' 在目录标题后插入目录域代码
-            tocRange.Collapse wdCollapseEnd
-            tocRange.Fields.Add Range:=tocRange, Type:=wdFieldTOC, Text:="\o ""1-3"" \h \z \u", PreserveFormatting:=True
-            ' 更新目录
-            tocRange.Fields.Update
-            
-            ' 设置目录条目格式（不加粗）
-            FormatTableOfContentsEntries
-            
-            ' 在目录后面添加分页符（找到目录内容的最后）
-            Dim tocFound As Boolean
-            Dim para2 As Paragraph
-            Dim lastTocPara As Paragraph
-            Dim pageBreakAdded As Boolean
-            tocFound = False
-            pageBreakAdded = False
-            
-            For Each para2 In ActiveDocument.Paragraphs
-                If Trim(Replace(para2.Range.Text, vbCr, "")) = "目录" Then
-                    tocFound = True
-                ElseIf tocFound Then
-                    ' 检查是否到达下一个标题（结束目录部分）
-                    If para2.Style = "标题 1" Or para2.Style = "标题 2" Or para2.Style = "标题 3" Or _
-                       para2.Style = "Heading 1" Or para2.Style = "Heading 2" Or para2.Style = "Heading 3" Then
-                        ' 找到目录结束位置，在最后一个目录条目后添加分页符
-                        If Not lastTocPara Is Nothing And Not pageBreakAdded Then
-                            Dim pageBreakRange As Range
-                            Set pageBreakRange = lastTocPara.Range.Duplicate
-                            pageBreakRange.Collapse wdCollapseEnd
-                            pageBreakRange.InsertBreak Type:=wdPageBreak
-                            pageBreakAdded = True
-                        End If
-                        Exit For
-                    ElseIf Len(Trim(para2.Range.Text)) > 0 Then
-                        ' 记录目录中的非空段落
-                        Set lastTocPara = para2
-                    End If
-                End If
-            Next para2
-            
-            ' 如果没有找到下一个标题且还没有添加分页符，在最后一个目录条目后添加分页符
-            If tocFound And Not lastTocPara Is Nothing And Not pageBreakAdded Then
-                Dim finalPageBreakRange As Range
-                Set finalPageBreakRange = lastTocPara.Range.Duplicate
-                finalPageBreakRange.Collapse wdCollapseEnd
-                finalPageBreakRange.InsertBreak Type:=wdPageBreak
-            End If
-            found = True
-            ' MsgBox "目录插入完成！"
+            Set tocPara = para
             Exit For
         End If
-    Next para
-    
-    If Not found Then
-        ' MsgBox "未找到目录标记，请在文档中插入'目录'段落"
+    Next i
+    If tocPara Is Nothing Then
+        MsgBox "未找到目录标记，请在文档中插入'目录'段落"
+        Exit Sub
     End If
+
+    ' 获取tocPara的索引
+    Dim idx As Integer
+    idx = 0
+    For i = 1 To ActiveDocument.Paragraphs.Count
+        If ActiveDocument.Paragraphs(i) Is tocPara Then
+            idx = i - 1
+            Exit For
+        End If
+    Next i
+
+    ' 获取tocPara的Range
+    Dim cleanRange As Range
+    Set cleanRange = tocPara.Range.Duplicate
+    cleanRange.Collapse wdCollapseStart
+
+    ' 向上查找并删除所有连续分页符
+    Do While cleanRange.Start > 0
+        cleanRange.MoveStart wdParagraph, -1
+        Dim txt As String
+        txt = cleanRange.Paragraphs(1).Range.Text
+        If Trim(txt) = Chr(12) Or Trim(txt) = Chr(12) & vbCr Then
+            cleanRange.Paragraphs(1).Range.Delete
+        ElseIf Right(txt, 1) = Chr(12) Then
+            ' 删除段落末尾分页符
+            Dim delRange As Range
+            Set delRange = cleanRange.Paragraphs(1).Range.Duplicate
+            delRange.End = delRange.End - 1
+            delRange.Characters(delRange.Characters.Count).Delete
+        Else
+            Exit Do
+        End If
+        cleanRange.Collapse wdCollapseStart
+    Loop
+
+    ' 2. 在tocPara前插入分页符和新目录标题
+    Set tocRange = tocPara.Range.Duplicate
+    tocRange.Collapse wdCollapseStart
+    tocRange.InsertBreak Type:=wdPageBreak
+    tocRange.InsertAfter "目录" & vbCr
+    tocRange.Collapse wdCollapseEnd
+
+    ' 3. 删除所有“目录”标题段落（除了刚插入的那个）
+    For i = ActiveDocument.Paragraphs.Count To 1 Step -1
+        Set para = ActiveDocument.Paragraphs(i)
+        If Trim(Replace(para.Range.Text, vbCr, "")) = "目录" And para.Range.Start <> tocRange.Start Then
+            para.Range.Delete
+        End If
+    Next i
+
+    ' 4. 删除所有目录域（wdFieldTOC）
+    For Each fld In ActiveDocument.Fields
+        If fld.Type = wdFieldTOC Then
+            fld.Delete
+        End If
+    Next fld
+
+    ' 5. 设置TOC 标题样式
+    For i = 1 To ActiveDocument.Paragraphs.Count
+        Set para = ActiveDocument.Paragraphs(i)
+        If Trim(Replace(para.Range.Text, vbCr, "")) = "目录" Then
+            Set tocTitlePara = para
+            Set tocTitleRange = para.Range.Duplicate
+            Exit For
+        End If
+    Next i
+    On Error Resume Next
+    tocTitlePara.Style = ActiveDocument.Styles("TOC 标题")
+    If Err.Number <> 0 Then
+        tocTitlePara.Style = ActiveDocument.Styles("正文文本")
+        If Err.Number <> 0 Then
+            tocTitlePara.Style = ActiveDocument.Styles("Normal")
+        End If
+    End If
+    On Error GoTo 0
+    With tocTitleRange.Font
+        .NameFarEast = "宋体"
+        .Name = "Times New Roman"
+        .Size = 18
+        .Bold = True
+        .Color = wdColorBlack
+    End With
+    With tocTitleRange.ParagraphFormat
+        .Alignment = wdAlignParagraphCenter
+        .FirstLineIndent = 0
+    End With
+
+    ' 6. 插入目录域
+    tocTitleRange.Collapse wdCollapseEnd
+    tocTitleRange.Fields.Add Range:=tocTitleRange, Type:=wdFieldTOC, Text:="\o ""1-3"" \h \z \u", PreserveFormatting:=True
+    tocTitleRange.Fields.Update
+    ' 找到目录域的结束位置，在其后插入分页符
+    For Each fld In ActiveDocument.Fields
+        If fld.Type = wdFieldTOC Then
+            Dim endRange As Range
+            Set endRange = ActiveDocument.Range(fld.Result.End, fld.Result.End)
+            endRange.InsertBreak Type:=wdPageBreak
+            Exit For
+        End If
+    Next fld
+    ' 7. 格式化目录条目
+    FormatTableOfContentsEntries
 End Sub
 
 ' 更新目录
