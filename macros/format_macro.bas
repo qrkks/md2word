@@ -85,6 +85,15 @@ Sub FormatBodyText()
                 .ParagraphFormat.Alignment = wdAlignParagraphLeft ' 左对齐
                 .ParagraphFormat.FirstLineIndent = 24 ' 首行缩进两字符
             End With
+        ' Compact样式：字体与正文一样，但无缩进
+        ElseIf para.Style = "Compact" Then
+            With para.Range
+                .Font.NameFarEast = "宋体"
+                .Font.Name = "Times New Roman"
+                .Font.Size = 12 ' 小四
+                .Font.Bold = False
+                .Font.Color = wdColorBlack
+            End With
         End If
     Next para
     MsgBox "正文格式化完成！"
@@ -389,75 +398,498 @@ Sub ProcessTableOfContents()
     MsgBox "目录处理完成！"
 End Sub
 
-' 正文中数字和英文字体格式化宏
-Sub FormatNumbersAndEnglishInBody()
+
+
+' 参考文献格式化宏
+Sub FormatReferences()
     Dim para As Paragraph
-    Dim char As Range
-    Dim charText As String
+    Dim txt As String
     Dim i As Integer
+    Dim pageBreakAdded As Boolean
     
-    For Each para In ActiveDocument.Paragraphs
-        ' 只处理正文段落
-        If para.Style = "正文文本" Or para.Style = "Normal" Or para.Style = "First Paragraph" Or para.Style = "正文" Then
-            ' 遍历段落中的每个字符
-            For i = 1 To para.Range.Characters.Count
-                Set char = para.Range.Characters(i)
-                charText = char.Text
-                
-                ' 检查是否为数字或英文字符
-                If IsNumeric(charText) Or _
-                   (Asc(charText) >= 65 And Asc(charText) <= 90) Or _  ' A-Z
-                   (Asc(charText) >= 97 And Asc(charText) <= 122) Then ' a-z
-                    ' 设置为Times New Roman
-                    With char.Font
-                        .Name = "Times New Roman"
-                        .NameFarEast = "Times New Roman"
-                    End With
-                End If
-            Next i
+    pageBreakAdded = False
+    
+    For i = 1 To ActiveDocument.Paragraphs.Count
+        Set para = ActiveDocument.Paragraphs(i)
+        txt = Trim(Replace(para.Range.Text, vbCr, ""))
+        
+        ' 查找参考文献标题
+        If txt = "参考文献" Or txt = "References" Or _
+           Left(txt, 5) = "参考文献：" Or Left(txt, 11) = "References:" Then
+            ' 只在第一次找到时添加分页符
+            If Not pageBreakAdded Then
+                ' 在参考文献标题前添加分页符
+                Dim refRange As Range
+                Set refRange = para.Range.Duplicate
+                refRange.Collapse wdCollapseStart
+                refRange.InsertBreak Type:=wdPageBreak
+                pageBreakAdded = True
+            End If
+            
+            ' 先设置样式，再格式化
+            On Error Resume Next
+            para.Style = ActiveDocument.Styles("标题 1")
+            If Err.Number <> 0 Then
+                ' 如果标题1样式不存在，尝试使用默认标题样式
+                para.Style = ActiveDocument.Styles("Heading 1")
+            End If
+            On Error GoTo 0
+            
+            ' 强制应用格式（覆盖样式）
+            With para.Range.Font
+                .NameFarEast = "宋体"
+                .Name = "宋体"
+                .Size = 18 ' 小二
+                .Bold = True
+                .Color = wdColorBlack
+            End With
+            With para.Range.ParagraphFormat
+                .Alignment = wdAlignParagraphCenter
+                .FirstLineIndent = 0
+                .LeftIndent = 0
+                .RightIndent = 0
+            End With
+            
         End If
-    Next para
+    Next i
     
-    MsgBox "正文中数字和英文字体格式化完成！"
+    MsgBox "参考文献标题格式化完成！"
 End Sub
 
-' 更高效的正文中数字和英文字体格式化宏（使用正则表达式）
-Sub FormatNumbersAndEnglishInBodyAdvanced()
+' 格式化参考文献条目
+Sub FormatReferenceEntries()
     Dim para As Paragraph
-    Dim paraText As String
+    Dim txt As String
     Dim i As Integer
-    Dim j As Integer
-    Dim charCode As Integer
-    Dim isEnglishOrNumber As Boolean
+    Dim foundReferences As Boolean
+    Dim referenceCount As Integer
     
-    For Each para In ActiveDocument.Paragraphs
-        ' 只处理正文段落
-        If para.Style = "正文文本" Or para.Style = "Normal" Or para.Style = "First Paragraph" Or para.Style = "正文" Then
-            ' 遍历段落中的每个字符
-            For i = 1 To para.Range.Characters.Count
-                charCode = Asc(para.Range.Characters(i).Text)
-                
-                ' 检查是否为数字或英文字符
-                isEnglishOrNumber = False
-                If charCode >= 48 And charCode <= 57 Then  ' 0-9
-                    isEnglishOrNumber = True
-                ElseIf charCode >= 65 And charCode <= 90 Then  ' A-Z
-                    isEnglishOrNumber = True
-                ElseIf charCode >= 97 And charCode <= 122 Then ' a-z
-                    isEnglishOrNumber = True
-                End If
-                
-                If isEnglishOrNumber Then
-                    ' 设置为Times New Roman
-                    With para.Range.Characters(i).Font
-                        .Name = "Times New Roman"
-                        .NameFarEast = "Times New Roman"
-                    End With
-                End If
-            Next i
+    foundReferences = False
+    referenceCount = 0
+    
+    For i = 1 To ActiveDocument.Paragraphs.Count
+        Set para = ActiveDocument.Paragraphs(i)
+        txt = Trim(Replace(para.Range.Text, vbCr, ""))
+        
+        ' 检查是否到达参考文献部分
+        If txt = "参考文献" Or txt = "References" Or _
+           Left(txt, 5) = "参考文献：" Or Left(txt, 11) = "References:" Then
+            foundReferences = True
+            GoTo NextPara
         End If
-    Next para
+        
+        ' 检查是否到达其他章节（结束参考文献部分）
+        If foundReferences And (txt = "附录" Or txt = "Appendix" Or _
+           Left(txt, 3) = "图 " Or Left(txt, 3) = "表 " Or _
+           Left(txt, 4) = "Figure" Or Left(txt, 4) = "Table" Or _
+           Left(txt, 5) = "致谢" Or Left(txt, 5) = "Acknowledgments" Or _
+           Left(txt, 6) = "作者简介" Or Left(txt, 6) = "Author Bio") Then
+            foundReferences = False
+            GoTo NextPara
+        End If
+        
+        ' 通用判断：检查是否遇到下一个标题样式（结束参考文献部分）
+        If foundReferences And (para.Style = "标题 1" Or para.Style = "标题 2" Or para.Style = "标题 3" Or _
+           para.Style = "Heading 1" Or para.Style = "Heading 2" Or para.Style = "Heading 3") Then
+            ' 在参考文献部分结束后添加分页符
+            Dim endRange As Range
+            Set endRange = para.Range.Duplicate
+            endRange.Collapse wdCollapseStart
+            endRange.InsertBreak Type:=wdPageBreak
+            foundReferences = False
+            GoTo NextPara
+        End If
+        
+        ' 如果在参考文献部分，格式化条目
+        If foundReferences Then
+            ' 跳过空行
+            If Len(txt) = 0 Then
+                GoTo NextPara
+            End If
+            
+            ' 检查是否为参考文献条目（不是空行且不是标题，且不是其他章节标题）
+            If Len(txt) > 0 And txt <> "参考文献" And txt <> "References" And _
+               Left(txt, 5) <> "参考文献：" And Left(txt, 11) <> "References:" And _
+               Left(txt, 3) <> "图 " And Left(txt, 3) <> "表 " And _
+               Left(txt, 4) <> "Figure" And Left(txt, 4) <> "Table" And _
+               Left(txt, 5) <> "致谢" And Left(txt, 5) <> "Acknowledgments" And _
+               Left(txt, 6) <> "作者简介" And Left(txt, 6) <> "Author Bio" And _
+               txt <> "附录" And txt <> "Appendix" And _
+               para.Style <> "标题 1" And para.Style <> "标题 2" And para.Style <> "标题 3" And _
+               para.Style <> "Heading 1" And para.Style <> "Heading 2" And para.Style <> "Heading 3" Then
+                referenceCount = referenceCount + 1
+                
+                ' 先设置段落格式（悬挂缩进）
+                With para.Range.ParagraphFormat
+                    .Alignment = wdAlignParagraphLeft
+                    .FirstLineIndent = -36 ' 首行缩进为负值，实现悬挂缩进（APA标准：0.5英寸）
+                    .LeftIndent = 36 ' 左缩进0.5英寸（APA标准）
+                    .LineSpacingRule = wdLineSpace1pt5
+                End With
+                
+                ' 再设置字体格式
+                With para.Range.Font
+                    .NameFarEast = "宋体"
+                    .Name = "Times New Roman"
+                    .Size = 12 ' 小四
+                    .Bold = False
+                    .Color = wdColorBlack
+                End With
+            End If
+        End If
+        
+NextPara:
+    Next i
     
-    MsgBox "正文中数字和英文字体格式化完成！"
+    MsgBox "参考文献条目格式化完成！共处理 " & referenceCount & " 个条目。"
+End Sub
+
+' 自动编号参考文献
+Sub AutoNumberReferences()
+    Dim para As Paragraph
+    Dim txt As String
+    Dim i As Integer
+    Dim foundReferences As Boolean
+    Dim referenceCount As Integer
+    Dim newText As String
+    
+    foundReferences = False
+    referenceCount = 0
+    
+    For i = 1 To ActiveDocument.Paragraphs.Count
+        Set para = ActiveDocument.Paragraphs(i)
+        txt = Trim(Replace(para.Range.Text, vbCr, ""))
+        
+        ' 检查是否到达参考文献部分
+        If txt = "参考文献" Or txt = "References" Or _
+           Left(txt, 5) = "参考文献：" Or Left(txt, 11) = "References:" Then
+            foundReferences = True
+            GoTo NextPara2
+        End If
+        
+        ' 如果在参考文献部分，处理条目
+        If foundReferences Then
+            ' 跳过空行
+            If Len(txt) = 0 Then
+                GoTo NextPara2
+            End If
+            
+            ' 检查是否为参考文献条目（不以数字开头，且不是标题）
+            If Not IsNumeric(Left(txt, 1)) And Left(txt, 1) <> "[" And Left(txt, 1) <> "(" And _
+               txt <> "参考文献" And txt <> "References" And _
+               Left(txt, 5) <> "参考文献：" And Left(txt, 11) <> "References:" Then
+                
+                referenceCount = referenceCount + 1
+                newText = "[" & referenceCount & "] " & txt
+                
+                ' 替换段落内容
+                para.Range.Text = newText & vbCr
+            End If
+        End If
+        
+NextPara2:
+    Next i
+    
+    MsgBox "参考文献自动编号完成！共编号 " & referenceCount & " 个条目。"
+End Sub
+
+' 完整的参考文献处理宏（APA格式）
+Sub ProcessReferences()
+    ' 1. 格式化参考文献标题
+    FormatReferences
+    ' 2. 格式化参考文献条目
+    FormatReferenceEntries
+    
+    MsgBox "参考文献处理完成！"
+End Sub
+
+' 参考文献按字母排序宏
+Sub SortReferences()
+    Dim para As Paragraph
+    Dim txt As String
+    Dim i As Integer
+    Dim foundReferences As Boolean
+    Dim referenceCount As Integer
+    Dim references() As String
+    Dim referenceRanges() As Range
+    Dim tempText As String
+    Dim tempRange As Range
+    Dim j As Integer, k As Integer
+    
+    foundReferences = False
+    referenceCount = 0
+    ReDim references(0)
+    ReDim referenceRanges(0)
+    
+    ' 第一步：收集参考文献条目
+    For i = 1 To ActiveDocument.Paragraphs.Count
+        Set para = ActiveDocument.Paragraphs(i)
+        txt = Trim(Replace(para.Range.Text, vbCr, ""))
+        
+        ' 检查是否到达参考文献部分
+        If txt = "参考文献" Or txt = "References" Or _
+           Left(txt, 5) = "参考文献：" Or Left(txt, 11) = "References:" Then
+            foundReferences = True
+            GoTo NextParaSort
+        End If
+        
+        ' 通用判断：检查是否遇到下一个标题样式（结束参考文献部分）
+        If foundReferences And (para.Style = "标题 1" Or para.Style = "标题 2" Or para.Style = "标题 3" Or _
+           para.Style = "Heading 1" Or para.Style = "Heading 2" Or para.Style = "Heading 3") Then
+            foundReferences = False
+            GoTo NextParaSort
+        End If
+        
+        ' 如果在参考文献部分，收集条目
+        If foundReferences Then
+            ' 跳过空行
+            If Len(txt) = 0 Then
+                GoTo NextParaSort
+            End If
+            
+            ' 检查是否为参考文献条目
+            If Len(txt) > 0 And txt <> "参考文献" And txt <> "References" And _
+               Left(txt, 5) <> "参考文献：" And Left(txt, 11) <> "References:" And _
+               Left(txt, 3) <> "图 " And Left(txt, 3) <> "表 " And _
+               Left(txt, 4) <> "Figure" And Left(txt, 4) <> "Table" And _
+               Left(txt, 5) <> "致谢" And Left(txt, 5) <> "Acknowledgments" And _
+               Left(txt, 6) <> "作者简介" And Left(txt, 6) <> "Author Bio" And _
+               txt <> "附录" And txt <> "Appendix" And _
+               para.Style <> "标题 1" And para.Style <> "标题 2" And para.Style <> "标题 3" And _
+               para.Style <> "Heading 1" And para.Style <> "Heading 2" And para.Style <> "Heading 3" Then
+                
+                referenceCount = referenceCount + 1
+                ReDim Preserve references(referenceCount - 1)
+                ReDim Preserve referenceRanges(referenceCount - 1)
+                
+                references(referenceCount - 1) = txt
+                Set referenceRanges(referenceCount - 1) = para.Range.Duplicate
+            End If
+        End If
+        
+NextParaSort:
+    Next i
+    
+    ' 第二步：按字母排序（不区分大小写，符合APA格式）
+    For j = 0 To referenceCount - 2
+        For k = j + 1 To referenceCount - 1
+            If LCase(references(j)) > LCase(references(k)) Then
+                ' 交换文本
+                tempText = references(j)
+                references(j) = references(k)
+                references(k) = tempText
+                
+                ' 交换范围
+                Set tempRange = referenceRanges(j)
+                Set referenceRanges(j) = referenceRanges(k)
+                Set referenceRanges(k) = tempRange
+            End If
+        Next k
+    Next j
+    
+    ' 第三步：重新排列段落
+    If referenceCount > 0 Then
+        ' 删除所有参考文献条目
+        For j = 0 To referenceCount - 1
+            referenceRanges(j).Delete
+        Next j
+        
+        ' 找到参考文献标题位置
+        Dim insertRange As Range
+        For i = 1 To ActiveDocument.Paragraphs.Count
+            Set para = ActiveDocument.Paragraphs(i)
+            txt = Trim(Replace(para.Range.Text, vbCr, ""))
+            
+            If txt = "参考文献" Or txt = "References" Or _
+               Left(txt, 5) = "参考文献：" Or Left(txt, 11) = "References:" Then
+                Set insertRange = para.Range.Duplicate
+                insertRange.Collapse wdCollapseEnd
+                Exit For
+            End If
+        Next i
+        
+        ' 按排序后的顺序插入
+        For j = 0 To referenceCount - 1
+            insertRange.InsertAfter references(j) & vbCr
+            ' 确保插入的段落使用正文样式
+            Dim newPara As Paragraph
+            Set newPara = insertRange.Paragraphs(insertRange.Paragraphs.Count)
+            If Not newPara Is Nothing Then
+                On Error Resume Next
+                newPara.Style = ActiveDocument.Styles("正文文本")
+                If Err.Number <> 0 Then
+                    ' 如果正文文本样式不存在，尝试使用默认样式
+                    newPara.Style = ActiveDocument.Styles("Normal")
+                End If
+                On Error GoTo 0
+            End If
+        Next j
+        
+        ' 在参考文献部分结束后添加分页符
+        Dim lastRefPara As Paragraph
+        Set lastRefPara = insertRange.Paragraphs(insertRange.Paragraphs.Count)
+        If Not lastRefPara Is Nothing Then
+            Dim endPageRange As Range
+            Set endPageRange = lastRefPara.Range.Duplicate
+            endPageRange.Collapse wdCollapseEnd
+            endPageRange.InsertBreak Type:=wdPageBreak
+        End If
+    End If
+    
+    MsgBox "参考文献排序完成！共排序 " & referenceCount & " 个条目。"
+End Sub
+
+' 完整的参考文献处理宏（包含排序）
+Sub ProcessReferencesWithSort()
+    ' 1. 格式化参考文献标题
+    FormatReferences
+    ' 2. 排序参考文献条目
+    SortReferences
+    ' 3. 格式化参考文献条目
+    FormatReferenceEntries
+    
+    MsgBox "参考文献处理完成（包含排序）！"
+End Sub
+
+' 总的一键格式化宏 - 按顺序执行所有格式化步骤
+Sub FormatAllDocument()
+    Dim response As Integer
+    
+    ' 询问用户是否继续
+    response = MsgBox("即将执行完整的文档格式化，包括：" & vbCrLf & _
+                     "1. 页面设置和正文行距" & vbCrLf & _
+                     "2. 标题格式化（题目、一级、二级、三级标题）" & vbCrLf & _
+                     "3. 正文格式化" & vbCrLf & _
+                     "4. 正文中数字和英文字体格式化（已移除）" & vbCrLf & _
+                     "5. 摘要和关键词格式化" & vbCrLf & _
+                     "6. 目录处理" & vbCrLf & _
+                     "7. 参考文献格式化（包含排序）" & vbCrLf & vbCrLf & _
+                     "是否继续？", vbYesNo + vbQuestion, "文档格式化")
+    
+    If response = vbNo Then
+        MsgBox "操作已取消。"
+        Exit Sub
+    End If
+    
+    ' 开始执行格式化
+    Application.ScreenUpdating = False ' 关闭屏幕更新，提高性能
+    
+    On Error GoTo ErrorHandler
+    
+    ' 检查文档是否为空
+    If ActiveDocument.Paragraphs.Count = 0 Then
+        MsgBox "文档为空，无法执行格式化。", vbExclamation, "警告"
+        Application.ScreenUpdating = True
+        Exit Sub
+    End If
+    
+    ' 1. 页面设置和正文行距
+    MsgBox "正在设置页面和正文行距..."
+    SetPageAndBodyFormat
+    
+    ' 2. 标题格式化
+    MsgBox "正在格式化标题..."
+    FormatTitleByHeadingStyle
+    FormatLevel1Heading
+    FormatLevel2Heading
+    FormatLevel3Heading
+    
+    ' 3. 正文格式化
+    MsgBox "正在格式化正文..."
+    FormatBodyText
+    
+    ' 4. 正文中数字和英文字体格式化（已移除，由其他格式化覆盖）
+    ' MsgBox "正在格式化正文中的数字和英文字体..."
+    ' FormatNumbersAndEnglishInBody
+    
+    ' 5. 摘要和关键词格式化
+    MsgBox "正在格式化摘要和关键词..."
+    MergeAndFormatAbstract
+    
+    ' 6. 目录处理
+    MsgBox "正在处理目录..."
+    ProcessTableOfContents
+    
+    ' 7. 参考文献格式化（包含排序）
+    MsgBox "正在格式化参考文献..."
+    ProcessReferencesWithSort
+    
+    Application.ScreenUpdating = True ' 恢复屏幕更新
+    
+    MsgBox "文档格式化完成！" & vbCrLf & vbCrLf & _
+           "所有格式化步骤已执行完毕，包括：" & vbCrLf & _
+           "✓ 页面设置和行距" & vbCrLf & _
+           "✓ 标题格式化" & vbCrLf & _
+           "✓ 正文格式化" & vbCrLf & _
+           "✓ 数字和英文字体（已移除）" & vbCrLf & _
+           "✓ 摘要和关键词" & vbCrLf & _
+           "✓ 目录处理" & vbCrLf & _
+           "✓ 参考文献格式化（含排序）", vbInformation, "格式化完成"
+    
+    Exit Sub
+
+ErrorHandler:
+    Application.ScreenUpdating = True ' 确保恢复屏幕更新
+    MsgBox "格式化过程中出现错误：" & vbCrLf & Err.Description, vbCritical, "错误"
+End Sub
+
+' 快速格式化宏（不包含排序，适用于已有排序的文档）
+Sub FormatAllDocumentQuick()
+    Dim response As Integer
+    
+    ' 询问用户是否继续
+    response = MsgBox("即将执行快速文档格式化（不包含排序），包括：" & vbCrLf & _
+                     "1. 页面设置和正文行距" & vbCrLf & _
+                     "2. 标题格式化" & vbCrLf & _
+                     "3. 正文格式化" & vbCrLf & _
+                     "4. 数字和英文字体格式化（已移除）" & vbCrLf & _
+                     "5. 摘要和关键词格式化" & vbCrLf & _
+                     "6. 目录处理" & vbCrLf & _
+                     "7. 参考文献格式化（不排序）" & vbCrLf & vbCrLf & _
+                     "是否继续？", vbYesNo + vbQuestion, "快速格式化")
+    
+    If response = vbNo Then
+        MsgBox "操作已取消。"
+        Exit Sub
+    End If
+    
+    ' 开始执行格式化
+    Application.ScreenUpdating = False
+    
+    On Error GoTo ErrorHandlerQuick
+    
+    ' 1. 页面设置和正文行距
+    SetPageAndBodyFormat
+    
+    ' 2. 标题格式化
+    FormatTitleByHeadingStyle
+    FormatLevel1Heading
+    FormatLevel2Heading
+    FormatLevel3Heading
+    
+    ' 3. 正文格式化
+    FormatBodyText
+    
+    ' 4. 正文中数字和英文字体格式化（已移除，由其他格式化覆盖）
+    ' FormatNumbersAndEnglishInBody
+    
+    ' 5. 摘要和关键词格式化
+    MergeAndFormatAbstract
+    
+    ' 6. 目录处理
+    ProcessTableOfContents
+    
+    ' 7. 参考文献格式化（不排序）
+    ProcessReferences
+    
+    Application.ScreenUpdating = True
+    
+    MsgBox "快速格式化完成！", vbInformation, "格式化完成"
+    
+    Exit Sub
+
+ErrorHandlerQuick:
+    Application.ScreenUpdating = True
+    MsgBox "格式化过程中出现错误：" & vbCrLf & Err.Description, vbCritical, "错误"
 End Sub
 
